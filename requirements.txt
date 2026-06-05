@@ -1,0 +1,6 @@
+flask
+gunicorn
+authlib
+requests
+PyMuPDF
+pypdf

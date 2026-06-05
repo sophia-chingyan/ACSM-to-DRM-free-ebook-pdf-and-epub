@@ -1,0 +1,44 @@
+{
+    "$schema": "https://schema.zeabur.app/template.json",
+    "build": {
+        "type": "dockerfile",
+        "dockerfile": "Dockerfile"
+    },
+    "env": {
+        "SECRET_KEY": {
+            "description": "Flask session secret. Set a fixed value to keep sessions across restarts.",
+            "required": true,
+            "generate": "SECRET"
+        },
+        "GOOGLE_CLIENT_ID": {
+            "description": "Google OAuth2 Client ID (Google Cloud Console -> Credentials).",
+            "required": true
+        },
+        "GOOGLE_CLIENT_SECRET": {
+            "description": "Google OAuth2 Client Secret (Google Cloud Console -> Credentials).",
+            "required": true
+        },
+        "ALLOWED_EMAIL": {
+            "description": "The single Google email allowed to log in (e.g. you@gmail.com).",
+            "required": true
+        },
+        "APP_BASE_URL": {
+            "description": "Public base URL, e.g. https://your-app.zeabur.app. Used to build the OAuth redirect URI.",
+            "required": false
+        }
+    },
+    "volumes": [
+        {
+            "id": "ebook-output",
+            "dir": "/app/output"
+        },
+        {
+            "id": "ebook-covers",
+            "dir": "/app/covers"
+        },
+        {
+            "id": "adobe-device",
+            "dir": "/app/.adept"
+        }
+    ]
+}
