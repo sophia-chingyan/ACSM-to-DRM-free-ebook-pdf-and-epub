@@ -214,6 +214,7 @@
     </main>
 
     <script>
+        const CSRF_TOKEN = '{{ csrf_token() }}';
         const dropZone       = document.getElementById('drop-zone');
         const fileInput      = document.getElementById('file-input');
         const uploadSection  = document.getElementById('upload-section');
@@ -273,7 +274,7 @@
             const fd = new FormData();
             fd.append('file', file);
             try {
-                const resp = await fetch('/upload', { method: 'POST', body: fd });
+                const resp = await fetch('/upload', { method: 'POST', body: fd, headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                 const data = await resp.json();
                 if (data.error) { alert(data.error); return; }
                 pendingFilename = data.filename;
@@ -297,7 +298,7 @@
 
             let jobId;
             try {
-                const resp = await fetch('/start-convert/' + encodeURIComponent(filename), { method: 'POST' });
+                const resp = await fetch('/start-convert/' + encodeURIComponent(filename), { method: 'POST', headers: { 'X-CSRF-Token': CSRF_TOKEN } });
                 const data = await resp.json();
                 if (data.error) { alert(data.error); resetToUpload(); return; }
                 jobId = data.job_id;
@@ -342,7 +343,13 @@
                     stopTimer();
                     addStep(data.error, 'error');
                     clearInterval(timer);
-                    setTimeout(resetToUpload, 6000);
+                    // Show a "Try again" button instead of auto-dismissing.
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-another';
+                    btn.textContent = 'Try again';
+                    btn.style.marginTop = '1rem';
+                    btn.onclick = resetToUpload;
+                    stepsDiv.appendChild(btn);
                 }
             }, 2000);
         }
