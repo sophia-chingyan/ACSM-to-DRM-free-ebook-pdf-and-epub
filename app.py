@@ -4,11 +4,11 @@
 import hashlib
 import hmac
 import os
-import re
 import secrets
 import threading
 import time
 import traceback
+import warnings
 from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
@@ -31,7 +31,6 @@ app = Flask(__name__)
 # SECRET_KEY: warn loudly if not configured (sessions won't survive restarts).
 _secret_key = os.environ.get("SECRET_KEY", "")
 if not _secret_key:
-    import warnings
     _secret_key = os.urandom(24).hex()
     warnings.warn(
         "SECRET_KEY is not set! Sessions will be lost on restart. "
@@ -395,8 +394,8 @@ def delete_book(stem):
     if not _check_csrf():
         return jsonify({"error": "Invalid or missing CSRF token"}), 403
     # Sanitize stem: only allow alphanumeric, hyphens, underscores, spaces, dots.
-    stem = secure_filename(stem)
-    stem = Path(stem).stem if stem else ""
+    sanitized = secure_filename(stem)
+    stem = Path(sanitized).stem if sanitized else ""
     if not stem or stem.startswith("."):
         return jsonify({"error": "Invalid stem"}), 400
     deleted = []
