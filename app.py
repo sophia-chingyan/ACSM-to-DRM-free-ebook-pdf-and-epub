@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Flask web interface for the unified ACSM -> DRM-free EPUB/PDF converter."""
 
+import hashlib
+import hmac
 import os
+import secrets
 import threading
 import time
 import traceback
+import warnings
 from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
@@ -15,6 +19,7 @@ from flask import (
     request, send_from_directory, session, url_for,
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
 
 from converter import (
     SUPPORTED_EXTENSIONS, TOTAL_STEPS, STEP_LABELS,
@@ -22,7 +27,18 @@ from converter import (
 )
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
+
+# SECRET_KEY: warn loudly if not configured (sessions won't survive restarts).
+_secret_key = os.environ.get("SECRET_KEY", "")
+if not _secret_key:
+    _secret_key = os.urandom(24).hex()
+    warnings.warn(
+        "SECRET_KEY is not set! Sessions will be lost on restart. "
+        "Set SECRET_KEY in your environment for persistent sessions.",
+        stacklevel=1,
+    )
+app.secret_key = _secret_key
+
 # Trust Zeabur's reverse proxy so generated redirect URIs use the right
 # scheme/host (works alongside APP_BASE_URL below).
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -52,6 +68,33 @@ for _d in (UPLOAD_DIR, OUTPUT_DIR, COVER_DIR):
 
 active_jobs = {}
 _jobs_lock = threading.Lock()
+# Track files currently being converted to prevent duplicate conversions.
+_converting_files = set()
+
+
+# ─── CSRF ────────────────────────────────────────────────────────────────────
+
+
+def _generate_csrf_token():
+    """Generate or retrieve per-session CSRF token."""
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(32)
+    return session["_csrf_token"]
+
+
+def _check_csrf():
+    """Validate CSRF token from request header or form data."""
+    token = request.headers.get("X-CSRF-Token") or request.form.get("_csrf_token")
+    expected = session.get("_csrf_token", "")
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        return False
+    return True
+
+
+@app.context_processor
+def inject_csrf():
+    """Make csrf_token available in all templates."""
+    return {"csrf_token": _generate_csrf_token}
 
 oauth = OAuth(app)
 oauth.register(
@@ -193,18 +236,19 @@ def run_conversion_job(job_id, acsm_path):
         for step, message, warning in convert_pipeline(
             str(acsm_path), str(OUTPUT_DIR), str(COVER_DIR)
         ):
-            if step == "done":
-                job["steps"].append({"step": "done", "message": message, "warning": False})
-                job["status"] = "done"
-                job["done_message"] = message
-            else:
-                job["steps"].append(
-                    {"step": int(step), "message": message, "warning": bool(warning)}
-                )
-                nxt = int(step) + 1
-                if nxt <= TOTAL_STEPS:
-                    job["current_step"] = nxt
-                    job["current_label"] = STEP_LABELS.get(nxt, "")
+            with _jobs_lock:
+                if step == "done":
+                    job["steps"].append({"step": "done", "message": message, "warning": False})
+                    job["done_message"] = message
+                    job["status"] = "done"
+                else:
+                    job["steps"].append(
+                        {"step": int(step), "message": message, "warning": bool(warning)}
+                    )
+                    nxt = int(step) + 1
+                    if nxt <= TOTAL_STEPS:
+                        job["current_step"] = nxt
+                        job["current_label"] = STEP_LABELS.get(nxt, "")
         # Successful conversion: the single-use .acsm is no longer needed.
         try:
             Path(acsm_path).unlink(missing_ok=True)
@@ -212,12 +256,18 @@ def run_conversion_job(job_id, acsm_path):
             pass
     except RuntimeError as exc:
         print(f"[JOB] {job_id} error: {exc}", flush=True)
-        job["status"] = "error"
-        job["error"] = str(exc)
+        with _jobs_lock:
+            job["status"] = "error"
+            job["error"] = str(exc)
     except Exception as exc:
         print(f"[JOB] {job_id} unexpected: {exc}\n{traceback.format_exc()}", flush=True)
-        job["status"] = "error"
-        job["error"] = f"Unexpected error: {exc}"
+        with _jobs_lock:
+            job["status"] = "error"
+            job["error"] = f"Unexpected error: {exc}"
+    finally:
+        # Remove file from the converting set so it can be re-converted if needed.
+        with _jobs_lock:
+            _converting_files.discard(str(acsm_path))
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -246,26 +296,50 @@ def library():
 @app.route("/upload", methods=["POST"])
 @login_required
 def upload():
+    if not _check_csrf():
+        return jsonify({"error": "Invalid or missing CSRF token"}), 403
     file = request.files.get("file")
     if not file or not file.filename:
         return jsonify({"error": "No file provided"}), 400
     if not file.filename.lower().endswith(".acsm"):
         return jsonify({"error": "Only .acsm files are accepted"}), 400
-    filename = Path(file.filename).name
-    file.save(UPLOAD_DIR / filename)
+    # Sanitize filename: strip path components & dangerous characters.
+    filename = secure_filename(file.filename)
+    if not filename or not filename.lower().endswith(".acsm"):
+        return jsonify({"error": "Invalid filename"}), 400
+    # Prevent overwriting an existing upload (append a short unique suffix).
+    dest = UPLOAD_DIR / filename
+    if dest.exists():
+        stem = Path(filename).stem
+        suffix = secrets.token_hex(4)
+        filename = f"{stem}_{suffix}.acsm"
+        dest = UPLOAD_DIR / filename
+    file.save(dest)
     return jsonify({"filename": filename})
 
 
 @app.route("/start-convert/<filename>", methods=["POST"])
 @login_required
 def start_convert(filename):
+    if not _check_csrf():
+        return jsonify({"error": "Invalid or missing CSRF token"}), 403
     _prune_old_jobs()
-    filename = Path(filename).name
+    filename = secure_filename(filename)
+    if not filename:
+        return jsonify({"error": "Invalid filename"}), 400
     acsm_path = UPLOAD_DIR / filename
     if not acsm_path.exists():
         return jsonify({"error": "File not found"}), 404
 
-    job_id = f"{filename}_{int(time.time())}"
+    # Prevent concurrent conversion of the same file.
+    with _jobs_lock:
+        if str(acsm_path) in _converting_files:
+            return jsonify({"error": "This file is already being converted"}), 409
+        _converting_files.add(str(acsm_path))
+
+    # Generate a URL-safe job ID (hex hash + timestamp).
+    safe_hash = hashlib.sha256(filename.encode()).hexdigest()[:8]
+    job_id = f"{safe_hash}_{int(time.time())}_{secrets.token_hex(4)}"
     with _jobs_lock:
         active_jobs[job_id] = {
             "filename": filename,
@@ -317,8 +391,12 @@ def download(filename):
 @login_required
 def delete_book(stem):
     """Delete every output file for a stem, plus its cover and any leftover upload."""
-    stem = Path(stem).stem
-    if not stem:
+    if not _check_csrf():
+        return jsonify({"error": "Invalid or missing CSRF token"}), 403
+    # Sanitize stem: only allow alphanumeric, hyphens, underscores, spaces, dots.
+    sanitized = secure_filename(stem)
+    stem = Path(sanitized).stem if sanitized else ""
+    if not stem or stem.startswith("."):
         return jsonify({"error": "Invalid stem"}), 400
     deleted = []
     for f in list(OUTPUT_DIR.iterdir()):

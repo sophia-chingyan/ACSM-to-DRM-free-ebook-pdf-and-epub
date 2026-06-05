@@ -239,6 +239,7 @@
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
+    const CSRF_TOKEN = '{{ csrf_token() }}';
     let currentView = localStorage.getItem('lib-view') || 'grid';
     let selectedStems = new Set();
     let deleteTarget = null;
@@ -360,7 +361,7 @@
 
     async function deleteStem(stem) {
         try {
-            const resp = await fetch('/delete/' + encodeURIComponent(stem), { method: 'POST' });
+            const resp = await fetch('/delete/' + encodeURIComponent(stem), { method: 'POST', headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             return { stem, ok: resp.ok };
         } catch (e) { return { stem, ok: false }; }
     }
