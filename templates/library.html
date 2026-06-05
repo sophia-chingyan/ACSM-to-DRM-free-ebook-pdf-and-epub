@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Library — ACSM Converter</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --accent: #4a90d9; --accent-hover: #357abd;
+            --danger: #e53935; --danger-hover: #c62828;
+            --card-shadow: 0 2px 10px rgba(0,0,0,0.08); --card-radius: 14px;
+            --surface: #fff; --muted: #78909c; --body-bg: #f0f2f5;
+        }
+        body { background: var(--body-bg); margin: 0; }
+
+        header.hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff; padding: 2rem 0 1.5rem; margin-bottom: 2rem;
+        }
+        .hero-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+        .hero-title h1 { color: #fff; margin: 0 0 0.25rem; font-size: 1.6rem; }
+        .hero-title p { color: #a0b4cc; margin: 0; font-size: 0.9rem; }
+        .hero-nav { display: flex; align-items: center; gap: 0.6rem; }
+        .hero-nav a {
+            display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 1rem;
+            border-radius: 8px; font-size: 0.88rem; font-weight: 600; text-decoration: none;
+            color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.25); transition: all 0.2s;
+        }
+        .hero-nav a:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.5); }
+
+        .stats-strip { display: flex; gap: 1.25rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+        .stat-pill { background: var(--surface); border-radius: 10px; padding: 0.65rem 1.1rem; display: flex; align-items: center; gap: 0.6rem; box-shadow: var(--card-shadow); font-size: 0.88rem; }
+        .stat-pill .stat-num { font-size: 1.2rem; font-weight: 700; color: #1e2a38; }
+        .stat-pill .stat-label { color: var(--muted); }
+
+        .empty-state { text-align: center; padding: 4rem 2rem; color: var(--muted); }
+        .empty-state .icon { font-size: 3.5rem; margin-bottom: 1rem; }
+        .empty-state h3 { color: #546e7a; margin-bottom: 0.5rem; }
+        .empty-state a { display: inline-block; margin-top: 1rem; padding: 0.6rem 1.5rem; border-radius: 8px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+
+        .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
+        .toolbar-left { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .book-count { font-size: 0.9rem; color: var(--muted); font-weight: 500; }
+        .search-input { padding: 0.45rem 0.9rem; border: 1px solid #cfd8dc; border-radius: 8px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; width: 220px; }
+        .search-input:focus { border-color: var(--accent); }
+        .btn-danger-outline { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; border: 1.5px solid #ef9a9a; color: var(--danger); background: transparent; transition: all 0.2s; }
+        .btn-danger-outline:hover:not(:disabled) { background: #ffebee; border-color: var(--danger); }
+        .btn-danger-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .view-toggle { display: flex; border: 1px solid #cfd8dc; border-radius: 8px; overflow: hidden; }
+        .view-btn { padding: 0.4rem 0.75rem; font-size: 1rem; border: none; background: transparent; cursor: pointer; color: var(--muted); transition: all 0.15s; }
+        .view-btn.active { background: var(--accent); color: #fff; }
+
+        .sort-bar { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; flex-wrap: wrap; }
+        .sort-btn { padding: 0.25rem 0.65rem; border-radius: 6px; border: 1px solid #cfd8dc; background: transparent; font-size: 0.82rem; cursor: pointer; color: #546e7a; transition: all 0.15s; }
+        .sort-btn.active { background: #e3f2fd; border-color: #90caf9; color: #1565c0; font-weight: 600; }
+
+        .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem; }
+        .book-card { background: var(--surface); border-radius: var(--card-radius); box-shadow: var(--card-shadow); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.2s, transform 0.15s; position: relative; }
+        .book-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.13); transform: translateY(-1px); }
+        .book-card.selected { outline: 2.5px solid var(--accent); }
+        .card-checkbox { position: absolute; top: 10px; left: 10px; width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; z-index: 5; opacity: 0; transition: opacity 0.15s; }
+        .book-card:hover .card-checkbox, .book-card.selected .card-checkbox { opacity: 1; }
+        .card-top { display: flex; }
+        .book-cover { width: 110px; min-height: 148px; background: linear-gradient(145deg, #e0e7ef, #c8d4e0); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .book-cover .placeholder { font-size: 2.5rem; color: #90a4ae; }
+        .card-meta { flex: 1; padding: 1rem 1rem 0.75rem; display: flex; flex-direction: column; min-width: 0; }
+        .card-title { font-size: 0.95rem; font-weight: 700; color: #1e2a38; word-break: break-word; margin-bottom: 0.6rem; line-height: 1.35; }
+        .card-files { display: flex; flex-direction: column; gap: 0.35rem; margin-top: auto; }
+        .card-file-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+        .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; flex-shrink: 0; }
+        .badge-epub { background: #e8f5e9; color: #2e7d32; }
+        .badge-pdf  { background: #fce4ec; color: #c62828; }
+        .file-size { color: var(--muted); margin-left: auto; flex-shrink: 0; }
+        .card-actions { padding: 0.65rem 1rem; border-top: 1px solid #f0f2f5; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .btn-dl-sm { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; text-decoration: none; color: #fff; background: var(--accent); transition: background 0.15s; white-space: nowrap; }
+        .btn-dl-sm:hover { background: var(--accent-hover); color: #fff; }
+        .btn-delete-sm { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.65rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; color: var(--danger); background: transparent; border: 1.5px solid #ef9a9a; cursor: pointer; transition: all 0.15s; margin-left: auto; }
+        .btn-delete-sm:hover { background: #ffebee; border-color: var(--danger); }
+
+        .book-list { display: flex; flex-direction: column; gap: 0.75rem; }
+        .list-row { background: var(--surface); border-radius: 10px; box-shadow: var(--card-shadow); display: flex; align-items: center; gap: 1rem; padding: 0.85rem 1.25rem; transition: box-shadow 0.15s; position: relative; }
+        .list-row:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.11); }
+        .list-row.selected { outline: 2.5px solid var(--accent); }
+        .list-checkbox { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .list-cover { width: 44px; height: 58px; border-radius: 4px; background: linear-gradient(145deg, #e0e7ef, #c8d4e0); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .list-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .list-cover .placeholder { font-size: 1.3rem; color: #90a4ae; }
+        .list-title { font-size: 0.95rem; font-weight: 600; color: #1e2a38; min-width: 0; flex: 1; word-break: break-word; }
+        .list-badges { display: flex; gap: 0.4rem; flex-wrap: wrap; flex-shrink: 0; }
+        .list-files { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
+        .list-delete { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.6rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; color: var(--danger); background: transparent; border: 1.5px solid #ef9a9a; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+        .list-delete:hover { background: #ffebee; border-color: var(--danger); }
+
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+        .modal-backdrop.open { display: flex; }
+        .modal { background: var(--surface); border-radius: 14px; padding: 2rem; max-width: 420px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.22); animation: modalIn 0.18s ease; }
+        @keyframes modalIn { from { transform: scale(0.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal h3 { margin: 0 0 0.5rem; color: #1e2a38; }
+        .modal p { color: #546e7a; margin: 0 0 1.5rem; font-size: 0.92rem; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+        .btn-cancel-modal { padding: 0.5rem 1.1rem; border-radius: 8px; border: 1px solid #cfd8dc; background: transparent; cursor: pointer; font-size: 0.9rem; color: #546e7a; transition: all 0.15s; }
+        .btn-cancel-modal:hover { border-color: #90a4ae; }
+        .btn-confirm-delete { padding: 0.5rem 1.2rem; border-radius: 8px; border: none; background: var(--danger); color: #fff; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+        .btn-confirm-delete:hover { background: var(--danger-hover); }
+
+        .toast-wrap { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { background: #263238; color: #fff; padding: 0.65rem 1.1rem; border-radius: 9px; font-size: 0.88rem; box-shadow: 0 4px 16px rgba(0,0,0,0.25); animation: toastIn 0.2s ease; max-width: 300px; }
+        @keyframes toastIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .toast.success { border-left: 3px solid #4caf50; }
+        .toast.error { border-left: 3px solid #f44336; }
+
+        @media (max-width: 600px) {
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .search-input { width: 100%; }
+            .book-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="container">
+        <div class="hero-inner">
+            <div class="hero-title">
+                <h1>📚 Library</h1>
+                <p>Manage your converted books — download or delete</p>
+            </div>
+            <nav class="hero-nav">
+                <a href="/">← Converter</a>
+                <a href="/logout">Logout</a>
+            </nav>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+
+    <div class="stats-strip">
+        <div class="stat-pill"><span class="stat-num" id="stat-books">{{ books|length }}</span><span class="stat-label">Books</span></div>
+        <div class="stat-pill"><span class="stat-num" id="stat-files">{{ total_files }}</span><span class="stat-label">Files</span></div>
+    </div>
+
+    {% if not books %}
+    <div class="empty-state">
+        <div class="icon">📭</div>
+        <h3>No books yet</h3>
+        <p>Convert your first ACSM file to get started.</p>
+        <a href="/">Go to Converter</a>
+    </div>
+    {% else %}
+
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input type="search" id="search-input" class="search-input" placeholder="🔍  Search by title…" oninput="applyFilters()">
+            <span class="book-count" id="visible-count"></span>
+        </div>
+        <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+            <button id="btn-delete-selected" class="btn-danger-outline" disabled onclick="confirmBulkDelete()">🗑 Delete selected</button>
+            <div class="view-toggle">
+                <button class="view-btn active" id="btn-grid" title="Grid" onclick="setView('grid')">⊞</button>
+                <button class="view-btn" id="btn-list" title="List" onclick="setView('list')">☰</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sort-bar">
+        Sort:
+        <button class="sort-btn active" data-sort="date" onclick="setSort('date')">Newest first</button>
+        <button class="sort-btn" data-sort="name" onclick="setSort('name')">Name A–Z</button>
+        <button class="sort-btn" data-sort="size" onclick="setSort('size')">Largest first</button>
+    </div>
+
+    <div class="book-grid" id="view-grid">
+        {% for book in books %}
+        <article class="book-card" data-stem="{{ book.stem }}" data-title="{{ book.stem | lower }}" data-idx="{{ loop.index }}">
+            <input type="checkbox" class="card-checkbox" data-stem="{{ book.stem }}" onchange="onCheck(this)" title="Select">
+            <div class="card-top">
+                <div class="book-cover">
+                    {% if book.cover %}<img src="/cover/{{ book.cover }}" alt="{{ book.stem }}">{% else %}<span class="placeholder">📖</span>{% endif %}
+                </div>
+                <div class="card-meta">
+                    <div class="card-title">{{ book.stem }}</div>
+                    <div class="card-files">
+                        {% for f in book.files %}
+                        <div class="card-file-row">
+                            <span class="badge badge-{{ f.ext|lower }}">{{ f.ext }}</span>
+                            <span class="file-size">{{ f.size }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-actions">
+                {% for f in book.files %}
+                <a href="/download/{{ f.name }}" class="btn-dl-sm" download>⬇ {{ f.ext }}</a>
+                {% endfor %}
+                <button class="btn-delete-sm" onclick="confirmDelete('{{ book.stem }}')" title="Delete this book">🗑</button>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <div class="book-list" id="view-list" style="display:none">
+        {% for book in books %}
+        <div class="list-row" data-stem="{{ book.stem }}" data-title="{{ book.stem | lower }}" data-idx="{{ loop.index }}">
+            <input type="checkbox" class="list-checkbox" data-stem="{{ book.stem }}" onchange="onCheck(this)">
+            <div class="list-cover">
+                {% if book.cover %}<img src="/cover/{{ book.cover }}" alt="{{ book.stem }}">{% else %}<span class="placeholder">📖</span>{% endif %}
+            </div>
+            <div class="list-title">{{ book.stem }}</div>
+            <div class="list-badges">
+                {% for f in book.files %}<span class="badge badge-{{ f.ext|lower }}">{{ f.ext }}</span>{% endfor %}
+            </div>
+            <div class="list-files">
+                {% for f in book.files %}<a href="/download/{{ f.name }}" class="btn-dl-sm" download title="{{ f.size }}">⬇ {{ f.ext }}</a>{% endfor %}
+            </div>
+            <button class="list-delete" onclick="confirmDelete('{{ book.stem }}')" title="Delete this book">🗑 Delete</button>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% endif %}
+</main>
+
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal(event)">
+    <div class="modal">
+        <h3>🗑 Delete book?</h3>
+        <p id="modal-body">This will permanently remove the file(s) from the server. This cannot be undone.</p>
+        <div class="modal-actions">
+            <button class="btn-cancel-modal" onclick="closeModal()">Cancel</button>
+            <button class="btn-confirm-delete" onclick="executeDelete()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+    let currentView = localStorage.getItem('lib-view') || 'grid';
+    let selectedStems = new Set();
+    let deleteTarget = null;
+
+    setView(currentView, true);
+    updateVisibleCount();
+
+    function setView(v, skipSave) {
+        currentView = v;
+        if (!skipSave) localStorage.setItem('lib-view', v);
+        const grid = document.getElementById('view-grid');
+        const list = document.getElementById('view-list');
+        const btnG = document.getElementById('btn-grid');
+        const btnL = document.getElementById('btn-list');
+        if (grid) grid.style.display = v === 'grid' ? 'grid' : 'none';
+        if (list) list.style.display = v === 'list' ? 'flex' : 'none';
+        if (btnG) btnG.classList.toggle('active', v === 'grid');
+        if (btnL) btnL.classList.toggle('active', v === 'list');
+    }
+
+    function setSort(s) {
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === s));
+        const sortFn = (a, b) => {
+            if (s === 'name') return a.dataset.title.localeCompare(b.dataset.title);
+            if (s === 'date') return parseInt(b.dataset.idx) - parseInt(a.dataset.idx);
+            if (s === 'size') {
+                const sa = parseFloat(a.querySelector('.file-size')?.textContent) || 0;
+                const sb = parseFloat(b.querySelector('.file-size')?.textContent) || 0;
+                return sb - sa;
+            }
+            return 0;
+        };
+        const grid = document.getElementById('view-grid');
+        const list = document.getElementById('view-list');
+        if (grid) [...grid.querySelectorAll('.book-card')].sort(sortFn).forEach(el => grid.appendChild(el));
+        if (list) [...list.querySelectorAll('.list-row')].sort(sortFn).forEach(el => list.appendChild(el));
+    }
+
+    function applyFilters() {
+        const el = document.getElementById('search-input');
+        if (!el) return;
+        const q = el.value.trim().toLowerCase();
+        ['#view-grid .book-card', '#view-list .list-row'].forEach(sel => {
+            document.querySelectorAll(sel).forEach(node => {
+                node.style.display = (!q || node.dataset.title.includes(q)) ? '' : 'none';
+            });
+        });
+        updateVisibleCount();
+    }
+
+    function updateVisibleCount() {
+        const all = document.querySelectorAll('#view-grid .book-card');
+        const visible = [...all].filter(e => e.style.display !== 'none').length;
+        const el = document.getElementById('visible-count');
+        if (!el) return;
+        el.textContent = visible < all.length ? `${visible} of ${all.length} books` : `${all.length} book${all.length !== 1 ? 's' : ''}`;
+    }
+
+    function onCheck(cb) {
+        const stem = cb.dataset.stem;
+        cb.checked ? selectedStems.add(stem) : selectedStems.delete(stem);
+        document.querySelectorAll(`input[data-stem="${CSS.escape(stem)}"]`).forEach(x => { x.checked = cb.checked; });
+        document.querySelectorAll(`.book-card[data-stem="${CSS.escape(stem)}"], .list-row[data-stem="${CSS.escape(stem)}"]`)
+            .forEach(c => c.classList.toggle('selected', cb.checked));
+        const btn = document.getElementById('btn-delete-selected');
+        if (!btn) return;
+        btn.disabled = selectedStems.size === 0;
+        btn.textContent = selectedStems.size > 0 ? `🗑 Delete selected (${selectedStems.size})` : '🗑 Delete selected';
+    }
+
+    function confirmDelete(stem) {
+        deleteTarget = stem;
+        document.getElementById('modal-body').textContent = `"${stem}" and all its files will be permanently removed.`;
+        document.getElementById('modal-backdrop').classList.add('open');
+    }
+
+    function confirmBulkDelete() {
+        if (selectedStems.size === 0) return;
+        deleteTarget = [...selectedStems];
+        const preview = deleteTarget.join(', ');
+        document.getElementById('modal-body').textContent =
+            `${deleteTarget.length} book(s) will be permanently deleted: ${preview.length > 80 ? preview.slice(0, 80) + '…' : preview}`;
+        document.getElementById('modal-backdrop').classList.add('open');
+    }
+
+    function closeModal(e) {
+        if (e && e.target !== document.getElementById('modal-backdrop')) return;
+        document.getElementById('modal-backdrop').classList.remove('open');
+        deleteTarget = null;
+    }
+
+    async function executeDelete() {
+        document.getElementById('modal-backdrop').classList.remove('open');
+        if (!deleteTarget) return;
+        const stems = Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget];
+        const results = await Promise.all(stems.map(deleteStem));
+        const failed = results.filter(r => !r.ok);
+
+        results.forEach(r => {
+            if (!r.ok) return;
+            document.querySelectorAll(`.book-card[data-stem="${CSS.escape(r.stem)}"], .list-row[data-stem="${CSS.escape(r.stem)}"]`)
+                .forEach(el => { el.style.transition = 'opacity 0.25s, transform 0.25s'; el.style.opacity = '0'; el.style.transform = 'scale(0.95)'; setTimeout(() => el.remove(), 270); });
+            selectedStems.delete(r.stem);
+        });
+
+        failed.length === 0
+            ? showToast(`✅ Deleted ${stems.length} book${stems.length !== 1 ? 's' : ''}.`, 'success')
+            : showToast(`⚠ ${failed.length} deletion(s) failed.`, 'error');
+
+        setTimeout(() => {
+            updateVisibleCount();
+            updateStats();
+            const btn = document.getElementById('btn-delete-selected');
+            if (btn) { btn.disabled = selectedStems.size === 0; btn.textContent = selectedStems.size > 0 ? `🗑 Delete selected (${selectedStems.size})` : '🗑 Delete selected'; }
+            if (document.querySelectorAll('#view-grid .book-card').length === 0) showEmptyState();
+        }, 350);
+        deleteTarget = null;
+    }
+
+    async function deleteStem(stem) {
+        try {
+            const resp = await fetch('/delete/' + encodeURIComponent(stem), { method: 'POST' });
+            return { stem, ok: resp.ok };
+        } catch (e) { return { stem, ok: false }; }
+    }
+
+    function updateStats() {
+        const s = document.getElementById('stat-books');
+        const f = document.getElementById('stat-files');
+        if (s) s.textContent = document.querySelectorAll('#view-grid .book-card').length;
+        if (f) f.textContent = document.querySelectorAll('#view-grid .btn-dl-sm').length;
+    }
+
+    function showEmptyState() {
+        document.querySelector('main.container').innerHTML = `
+            <div class="empty-state">
+                <div class="icon">📭</div>
+                <h3>Library is empty</h3>
+                <p>All files have been deleted.</p>
+                <a href="/">Go to Converter</a>
+            </div>`;
+    }
+
+    function showToast(msg, type) {
+        const wrap = document.getElementById('toast-wrap');
+        const div = document.createElement('div');
+        div.className = 'toast ' + (type || '');
+        div.textContent = msg;
+        wrap.appendChild(div);
+        setTimeout(() => { div.style.transition = 'opacity 0.3s'; div.style.opacity = '0'; setTimeout(() => div.remove(), 320); }, 3200);
+    }
+</script>
+</body>
+</html>

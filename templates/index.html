@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ACSM Converter</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root { --pico-font-size: 16px; --accent: #4a90d9; --accent-hover: #357abd; }
+        body { background: #f0f2f5; }
+
+        header.hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff; padding: 2.25rem 0; margin-bottom: 2rem;
+        }
+        .hero-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+        .hero-title h1 { color: #fff; margin: 0 0 0.25rem; }
+        .hero-title p { color: #a0b4cc; margin: 0; }
+        .hero-nav { display: flex; align-items: center; gap: 0.6rem; }
+        .hero-nav a {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600;
+            text-decoration: none; color: rgba(255,255,255,0.85);
+            border: 1px solid rgba(255,255,255,0.28); transition: all 0.2s;
+        }
+        .hero-nav a:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.55); }
+        .hero-user { display: inline-flex; align-items: center; gap: 0.45rem; color: #a0b4cc; font-size: 0.85rem; }
+        .hero-user img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); }
+
+        .drop-zone {
+            border: 2px dashed #b0bec5; border-radius: 12px; padding: 3rem 2rem;
+            text-align: center; cursor: pointer; transition: all 0.25s; background: #fff; margin-bottom: 2rem;
+        }
+        .drop-zone:hover { border-color: var(--accent); background: #eef4fb; }
+        .drop-zone.dragover { border-color: var(--accent); background: #dbe9f9; transform: scale(1.01); }
+        .drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .drop-zone p { margin: 0; color: #546e7a; }
+
+        #confirm-section, #progress-section, #done-section { display: none; }
+        #confirm-section, #progress-section, #done-section, .panel {
+            background: #fff; border-radius: 12px; padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 2rem;
+        }
+        section h3 { margin-top: 0; }
+        .confirm-filename { font-weight: 600; word-break: break-all; }
+        .confirm-buttons { display: flex; gap: 1rem; margin-top: 1rem; }
+        .confirm-buttons button { flex: 1; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .step { padding: 0.3rem 0; font-size: 0.95rem; }
+        .step[data-status="active"] { font-weight: bold; }
+        .step[data-status="done"]::before    { content: "✓ "; color: #2e7d32; }
+        .step[data-status="warning"]::before { content: "⚠ "; color: #e65100; }
+        .step[data-status="error"]::before   { content: "✗ "; color: #c62828; }
+        .step[data-status="warning"] { color: #bf360c; }
+        .step[data-status="error"]   { color: #c62828; }
+        .step[data-status="active"]::before {
+            content: ""; display: inline-block; width: 13px; height: 13px;
+            border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%;
+            animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;
+        }
+        .step .elapsed { font-weight: normal; font-size: 0.8rem; color: #78909c; margin-left: 0.5rem; }
+
+        .done-title { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+        .done-title h3 { margin: 0; color: #2e7d32; }
+        .done-subtitle { color: #546e7a; margin-bottom: 1rem; font-size: 0.95rem; }
+        .warning-box {
+            background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px;
+            padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.88rem; color: #5d4037; display: none;
+        }
+        .done-actions { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+        .btn-dl-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.4rem;
+            border-radius: 8px; font-size: 0.95rem; font-weight: 600; text-decoration: none;
+            color: #fff; background: #388e3c; transition: background 0.2s; white-space: nowrap;
+        }
+        .btn-dl-primary:hover { background: #2e7d32; color: #fff; }
+        .btn-another {
+            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.4rem;
+            border-radius: 8px; font-size: 0.95rem; font-weight: 500; color: #546e7a;
+            background: transparent; border: 1px solid #cfd8dc; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-another:hover { border-color: #90a4ae; color: #37474f; }
+
+        .library-banner { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+        .library-banner h3 { margin: 0; }
+        .btn-library {
+            display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.9rem;
+            border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none;
+            color: var(--accent); border: 1.5px solid var(--accent); transition: all 0.2s;
+        }
+        .btn-library:hover { background: var(--accent); color: #fff; }
+
+        .book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem; }
+        .book-card {
+            background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden; display: flex; flex-direction: row; transition: box-shadow 0.2s;
+        }
+        .book-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+        .book-cover {
+            width: 120px; min-height: 160px; background: linear-gradient(135deg, #e0e0e0, #bdbdbd);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;
+        }
+        .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .book-cover .placeholder { font-size: 2.5rem; color: #9e9e9e; }
+        .book-info { padding: 1rem 1.25rem; display: flex; flex-direction: column; justify-content: center; flex: 1; min-width: 0; }
+        .book-info h4 { margin: 0 0 0.75rem 0; font-size: 1.05rem; word-break: break-word; }
+        .book-files { display: flex; flex-direction: column; gap: 0.4rem; }
+        .book-file { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+        .file-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; }
+        .file-badge.epub { background: #e8f5e9; color: #2e7d32; }
+        .file-badge.pdf  { background: #fce4ec; color: #c62828; }
+        .file-size { color: #78909c; font-size: 0.85rem; }
+        .btn-dl {
+            display: inline-block; padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.8rem;
+            font-weight: 500; text-decoration: none; color: #fff; background: var(--accent);
+            transition: background 0.2s; white-space: nowrap;
+        }
+        .btn-dl:hover { background: var(--accent-hover); color: #fff; }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <div class="container">
+            <div class="hero-inner">
+                <div class="hero-title">
+                    <h1>ACSM Converter</h1>
+                    <p>Convert ACSM tokens to DRM-free EPUB or PDF</p>
+                </div>
+                <nav class="hero-nav">
+                    <a href="/library">📚 Library</a>
+                    <a href="/logout">Logout</a>
+                    {% if user_picture %}
+                    <span class="hero-user">
+                        <img src="{{ user_picture }}" referrerpolicy="no-referrer" alt="">
+                        {{ user_name }}
+                    </span>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="upload-section">
+            <div class="drop-zone" id="drop-zone">
+                <div class="icon">&#128214;</div>
+                <p><strong>Drag &amp; drop</strong> an .acsm file here, or <strong>click to browse</strong></p>
+                <input type="file" id="file-input" accept=".acsm" hidden>
+            </div>
+        </section>
+
+        <section id="confirm-section">
+            <h3>Ready to Convert</h3>
+            <p>File: <span class="confirm-filename" id="confirm-filename"></span></p>
+            <p>This will download the book, detect its real format, and remove DRM. The output type (EPUB or PDF) is decided automatically.</p>
+            <div class="confirm-buttons">
+                <button id="confirm-cancel" class="secondary outline">Cancel</button>
+                <button id="confirm-start">Start Conversion</button>
+            </div>
+        </section>
+
+        <section id="progress-section">
+            <h3>Converting: <span id="converting-name"></span></h3>
+            <progress id="progress-bar" value="0" max="6" style="margin-bottom:1rem"></progress>
+            <div id="steps"></div>
+        </section>
+
+        <section id="done-section">
+            <div class="done-title">
+                <span id="done-icon" style="font-size:1.5rem">✅</span>
+                <h3 id="done-heading">Conversion Complete!</h3>
+            </div>
+            <p class="done-subtitle" id="done-subtitle"></p>
+            <div class="warning-box" id="warning-box">
+                <strong>⚠ Note:</strong> <span id="warning-text"></span> The file is still downloadable.
+            </div>
+            <div class="done-actions" id="done-actions"></div>
+        </section>
+
+        {% if books %}
+        <section class="panel">
+            <div class="library-banner">
+                <h3>Recently Converted</h3>
+                <a href="/library" class="btn-library">Manage Library →</a>
+            </div>
+            <div class="book-grid">
+                {% for book in books %}
+                <article class="book-card">
+                    <div class="book-cover">
+                        {% if book.cover %}
+                        <img src="/cover/{{ book.cover }}" alt="{{ book.stem }} cover">
+                        {% else %}
+                        <span class="placeholder">&#128218;</span>
+                        {% endif %}
+                    </div>
+                    <div class="book-info">
+                        <h4>{{ book.stem }}</h4>
+                        <div class="book-files">
+                            {% for f in book.files %}
+                            <div class="book-file">
+                                <span class="file-badge {{ f.ext|lower }}">{{ f.ext }}</span>
+                                <span class="file-size">{{ f.size }}</span>
+                                <a href="/download/{{ f.name }}" class="btn-dl">Download</a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </main>
+
+    <script>
+        const dropZone       = document.getElementById('drop-zone');
+        const fileInput      = document.getElementById('file-input');
+        const uploadSection  = document.getElementById('upload-section');
+        const confirmSection = document.getElementById('confirm-section');
+        const confirmName    = document.getElementById('confirm-filename');
+        const confirmStart   = document.getElementById('confirm-start');
+        const confirmCancel  = document.getElementById('confirm-cancel');
+        const progressSection= document.getElementById('progress-section');
+        const stepsDiv       = document.getElementById('steps');
+        const progressBar    = document.getElementById('progress-bar');
+        const convertingName = document.getElementById('converting-name');
+        const doneSection    = document.getElementById('done-section');
+        const doneSubtitle   = document.getElementById('done-subtitle');
+        const doneIcon       = document.getElementById('done-icon');
+        const doneHeading    = document.getElementById('done-heading');
+        const doneActions    = document.getElementById('done-actions');
+        const warningBox     = document.getElementById('warning-box');
+        const warningText    = document.getElementById('warning-text');
+
+        let pendingFilename = null;
+        let elapsedTimer = null;
+        let stepStartTime = null;
+        let lastRendered = 0;
+        let totalSteps = 6;
+        let hadWarning = false;
+        const stepDivs = {};
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', () => { if (fileInput.files[0]) uploadFile(fileInput.files[0]); });
+        confirmStart.addEventListener('click', () => { if (pendingFilename) startConversion(pendingFilename); });
+        confirmCancel.addEventListener('click', resetToUpload);
+
+        function resetToUpload() {
+            doneSection.style.display = 'none';
+            progressSection.style.display = 'none';
+            confirmSection.style.display = 'none';
+            uploadSection.style.display = 'block';
+            pendingFilename = null;
+            fileInput.value = '';
+            stepsDiv.innerHTML = '';
+            doneActions.innerHTML = '';
+            warningBox.style.display = 'none';
+            Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
+            lastRendered = 0;
+            hadWarning = false;
+        }
+
+        async function uploadFile(file) {
+            if (!file.name.toLowerCase().endsWith('.acsm')) { alert('Please select an .acsm file'); return; }
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const resp = await fetch('/upload', { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (data.error) { alert(data.error); return; }
+                pendingFilename = data.filename;
+                uploadSection.style.display = 'none';
+                confirmName.textContent = data.filename;
+                confirmSection.style.display = 'block';
+            } catch (err) { alert('Upload failed: ' + err.message); }
+        }
+
+        async function startConversion(filename) {
+            confirmSection.style.display = 'none';
+            uploadSection.style.display = 'none';
+            progressSection.style.display = 'block';
+            convertingName.textContent = filename;
+            stepsDiv.innerHTML = '';
+            progressBar.value = 0;
+            lastRendered = 0;
+            hadWarning = false;
+            doneActions.innerHTML = '';
+            Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
+
+            let jobId;
+            try {
+                const resp = await fetch('/start-convert/' + encodeURIComponent(filename), { method: 'POST' });
+                const data = await resp.json();
+                if (data.error) { alert(data.error); resetToUpload(); return; }
+                jobId = data.job_id;
+            } catch (err) { alert('Failed to start: ' + err.message); resetToUpload(); return; }
+
+            showActiveStep(1, 'Checking tools...');
+            poll(jobId);
+        }
+
+        function poll(jobId) {
+            const timer = setInterval(async () => {
+                let data;
+                try {
+                    const resp = await fetch('/job-status/' + encodeURIComponent(jobId));
+                    data = await resp.json();
+                } catch (err) { return; }
+
+                if (data.total_steps) { totalSteps = data.total_steps; progressBar.max = totalSteps; }
+
+                for (let i = lastRendered; i < data.steps.length; i++) {
+                    const s = data.steps[i];
+                    if (s.step === 'done') {
+                        finalizeSpinners();
+                        stopTimer();
+                        progressBar.value = totalSteps;
+                        clearInterval(timer);
+                        showDone(s.message);
+                        return;
+                    }
+                    renderStep(s);
+                }
+                lastRendered = data.steps.length;
+
+                if (data.status === 'running' && data.current_step > 0 && !stepDivs[data.current_step]) {
+                    showActiveStep(data.current_step, data.current_label);
+                }
+
+                if (data.status === 'error') {
+                    Object.values(stepDivs).forEach(d => {
+                        if (d.dataset.status === 'active') { d.dataset.status = 'error'; const e = d.querySelector('.elapsed'); if (e) e.remove(); }
+                    });
+                    stopTimer();
+                    addStep(data.error, 'error');
+                    clearInterval(timer);
+                    setTimeout(resetToUpload, 6000);
+                }
+            }, 2000);
+        }
+
+        function renderStep(s) {
+            const status = s.warning ? 'warning' : 'done';
+            if (s.warning) hadWarning = true;
+            const label = 'Step ' + s.step + '/' + totalSteps + ': ' + s.message;
+            if (stepDivs[s.step]) {
+                stopTimer();
+                const div = stepDivs[s.step];
+                div.dataset.status = status;
+                const e = div.querySelector('.elapsed'); if (e) e.remove();
+                div.childNodes[0].textContent = label;
+            } else {
+                const div = document.createElement('div');
+                div.className = 'step';
+                div.dataset.status = status;
+                div.textContent = label;
+                stepDivs[s.step] = div;
+                stepsDiv.appendChild(div);
+            }
+            if (s.warning) warningText.textContent = s.message;
+            progressBar.value = s.step;
+        }
+
+        function finalizeSpinners() {
+            Object.values(stepDivs).forEach(d => {
+                if (d.dataset.status === 'active') { d.dataset.status = 'done'; const e = d.querySelector('.elapsed'); if (e) e.remove(); }
+            });
+        }
+
+        function showDone(message) {
+            const [name, size] = message.split('|');
+            const ext = (name.split('.').pop() || '').toUpperCase();
+            setTimeout(() => {
+                progressSection.style.display = 'none';
+                doneSubtitle.textContent = name + (size ? ' (' + size + ')' : '');
+                doneActions.innerHTML = '';
+
+                const dl = document.createElement('a');
+                dl.className = 'btn-dl-primary';
+                dl.href = '/download/' + encodeURIComponent(name);
+                dl.textContent = '⬇ Download ' + ext;
+                doneActions.appendChild(dl);
+
+                const again = document.createElement('button');
+                again.className = 'btn-another';
+                again.textContent = 'Convert another file';
+                again.onclick = resetToUpload;
+                doneActions.appendChild(again);
+
+                if (hadWarning) {
+                    doneIcon.textContent = '⚠️';
+                    doneHeading.textContent = 'Complete (with a note)';
+                    doneHeading.style.color = '#e65100';
+                    warningBox.style.display = 'block';
+                } else {
+                    doneIcon.textContent = '✅';
+                    doneHeading.textContent = 'Conversion Complete!';
+                    doneHeading.style.color = '#2e7d32';
+                    warningBox.style.display = 'none';
+                }
+                doneSection.style.display = 'block';
+            }, 800);
+        }
+
+        function showActiveStep(stepNum, label) {
+            stopTimer();
+            const div = document.createElement('div');
+            div.className = 'step';
+            div.dataset.status = 'active';
+            div.appendChild(document.createTextNode('Step ' + stepNum + '/' + totalSteps + ': ' + label + ' '));
+            const span = document.createElement('span');
+            span.className = 'elapsed';
+            div.appendChild(span);
+            stepDivs[stepNum] = div;
+            stepStartTime = Date.now();
+            elapsedTimer = setInterval(() => {
+                const secs = Math.floor((Date.now() - stepStartTime) / 1000);
+                span.textContent = formatElapsed(secs);
+            }, 1000);
+            stepsDiv.appendChild(div);
+        }
+
+        function stopTimer() { if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; } }
+        function formatElapsed(s) { const m = Math.floor(s / 60); const r = s % 60; return m > 0 ? m + 'm ' + r + 's' : r + 's'; }
+        function addStep(text, status) {
+            const div = document.createElement('div');
+            div.className = 'step';
+            div.dataset.status = status;
+            div.textContent = text;
+            stepsDiv.appendChild(div);
+        }
+    </script>
+</body>
+</html>
