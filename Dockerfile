@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Build dependencies for libgourou only — no OCR toolchain (spec decision #3).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git cmake make g++ \
+    git cmake make g++ pkg-config \
     libpugixml-dev libzip-dev libssl-dev libcurl4-openssl-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -16,6 +16,7 @@ RUN git clone https://github.com/SamuelMarks/libgourou.git -b cmake /app/libgour
     && cd /app/libgourou \
     && git checkout 254e56ecc57b8871134eb2f3461506109e9cb231 \
     && sed -i 's|git://soutade.fr/updfparser.git|https://github.com/SamuelMarks/updfparser.git|' scripts/setup.sh \
+    && sed -i 's|find_package(CURL CONFIG REQUIRED)|find_package(CURL REQUIRED)|' utils/CMakeLists.txt \
     && mkdir build && cd build \
     && cmake .. -DBUILD_UTILS=ON -DBUILD_SHARED_LIBS=OFF \
     && make -j"$(nproc)" \
