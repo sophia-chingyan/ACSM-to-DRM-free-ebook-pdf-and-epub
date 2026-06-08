@@ -16,7 +16,14 @@ RUN git clone https://github.com/SamuelMarks/libgourou.git -b cmake /app/libgour
     && cd /app/libgourou \
     && git checkout 254e56ecc57b8871134eb2f3461506109e9cb231 \
     && sed -i 's|git://soutade.fr/updfparser.git|https://github.com/SamuelMarks/updfparser.git|' scripts/setup.sh \
-    && make BUILD_UTILS=1 BUILD_STATIC=1 BUILD_SHARED=0 \
+    && mkdir build && cd build \
+    && cmake .. -DBUILD_UTILS=ON -DBUILD_SHARED_LIBS=OFF \
+    && make -j"$(nproc)" \
+    && mkdir -p /app/libgourou/utils \
+    && cp -f /app/libgourou/build/utils/acsmdownloader \
+             /app/libgourou/build/utils/adept_activate \
+             /app/libgourou/build/utils/adept_remove \
+             /app/libgourou/utils/ \
     && ls -la /app/libgourou/utils/acsmdownloader
 
 # Canonical ADEPT credential path (spec decision #8). Mount this exact path as a
