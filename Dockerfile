@@ -9,9 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Clone and build libgourou (acsmdownloader, adept_activate, adept_remove).
-RUN git clone --recurse-submodules https://forge.soutade.fr/soutade/libgourou.git /app/libgourou \
+# Clone and build libgourou from GitHub mirrors (forge.soutade.fr is
+# unreachable from some build environments such as Zeabur).
+# Pinned to commit 254e56e (latest on 'cmake' branch as of 2022-12-05).
+RUN git clone https://github.com/SamuelMarks/libgourou.git -b cmake /app/libgourou \
     && cd /app/libgourou \
+    && git checkout 254e56ecc57b8871134eb2f3461506109e9cb231 \
+    && sed -i 's|git://soutade.fr/updfparser.git|https://github.com/SamuelMarks/updfparser.git|' scripts/setup.sh \
     && make BUILD_UTILS=1 BUILD_STATIC=1 BUILD_SHARED=0 \
     && ls -la /app/libgourou/utils/acsmdownloader
 
