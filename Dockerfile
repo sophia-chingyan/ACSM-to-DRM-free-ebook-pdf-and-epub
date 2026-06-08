@@ -9,13 +9,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Clone and build libgourou from GitHub mirrors (forge.soutade.fr is
-# unreachable from some build environments such as Zeabur).
+# ── Step 1: Build and install updfparser ────────────────────────────────────
+# libgourou depends on updfparser. It must be built and installed system-wide
+# first so CMake's find_package(updfparser) call succeeds when building libgourou.
+RUN git clone https://github.com/SamuelMarks/updfparser.git /tmp/updfparser \
+    && cd /tmp/updfparser \
+    && mkdir build && cd build \
+    && cmake .. -DBUILD_SHARED_LIBS=OFF \
+    && make -j"$(nproc)" \
+    && make install \
+    && ldconfig \
+    && rm -rf /tmp/updfparser
+
+# ── Step 2: Build libgourou (now that updfparser is on the system) ───────────
 # Pinned to commit 254e56e (latest on 'cmake' branch as of 2022-12-05).
 RUN git clone https://github.com/SamuelMarks/libgourou.git -b cmake /app/libgourou \
     && cd /app/libgourou \
     && git checkout 254e56ecc57b8871134eb2f3461506109e9cb231 \
-    && sed -i 's|git://soutade.fr/updfparser.git|https://github.com/SamuelMarks/updfparser.git|' scripts/setup.sh \
     && sed -i 's|find_package(CURL CONFIG REQUIRED)|find_package(CURL REQUIRED)|' utils/CMakeLists.txt \
     && mkdir build && cd build \
     && cmake .. -DBUILD_UTILS=ON -DBUILD_SHARED_LIBS=OFF \
